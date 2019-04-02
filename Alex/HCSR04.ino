@@ -1,4 +1,4 @@
-void ultrasonicsetup{
+void ultrasonicsetup(){
   pinMode(A0, OUTPUT);
   pinMode(A1, INPUT);
 }
