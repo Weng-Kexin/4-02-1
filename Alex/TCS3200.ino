@@ -1,3 +1,4 @@
+
 #define S0 7
 #define S1 8
 #define S2 9
@@ -23,7 +24,7 @@ void coloursetup() {
   Serial.begin(9600);
 }
 
-void colourloop() {
+void findColour() {
   // Setting red filtered photodiodes to be read
   digitalWrite(S2, LOW);
   digitalWrite(S3, LOW);
@@ -55,10 +56,10 @@ void colourloop() {
   frequencyG = frequencyG / 10;
 
   if (frequencyG > frequencyR) {
-    Serial.println("GREEN");
-    return GREEN;
+    //Serial.println("GREEN");
+    sendColour(GREEN);
   } else {
-    Serial.println("RED");
-    return RED;
+    //Serial.println("RED");
+    sendColour(RED);
   }
 }

@@ -113,6 +113,16 @@ void sendStatus()
   sendResponse(&statusPacket);
 }
 
+void sendColour(int colour)
+{
+  TPacket statusPacket;
+  statusPacket.packetType = PACKET_TYPE_RESPONSE;
+  statusPacket.command = RESP_COLOUR;
+  statusPacket.params[0] = colour;
+
+  sendResponse(&statusPacket);
+}
+
 void sendMessage(const char *message)
 {
   // Sends text messages back to the Pi. Useful
@@ -611,7 +621,10 @@ void handleCommand(TPacket *command)
       sendOK();
       clearOneCounter(command->params[0]);
       break;
-
+    case COMMAND_FIND_COLOUR:
+      sendOK();
+      findColour();
+      break;
 
 
     /*
@@ -734,6 +747,6 @@ void loop() {
   ultrasonicloop();
   
   //TCS3200
-  colourloop();
+
 
 }
