@@ -12,21 +12,6 @@ typedef enum
 } TDirection;
 
 volatile TDirection dir = STOP;
-/*
-   Alex's configuration constants
-*/
-
-// Number of ticks per revolution from the
-// wheel encoder.
-
-//#define COUNTS_PER_REV      1
-//#define WHEEL_CIRC          1
-
-// Wheel circumference in cm.
-// We will use this to calculate forward/backward distance traveled
-// by taking revs * WHEEL_CIRC
-
-
 
 // Motor control pins. You need to adjust these till
 // Alex moves in the correct direction
@@ -62,13 +47,6 @@ volatile float rightRevs;
 volatile float forwardDist;
 volatile float reverseDist;
 
-
-/*
-
-   Alex Communication Routines.
-
-*/
-
 TResult readPacket(TPacket *packet)
 {
   // Reads in data from the serial port and
@@ -89,13 +67,7 @@ TResult readPacket(TPacket *packet)
 
 void sendStatus()
 {
-  // Implement code to send back a packet containing key
-  // information like leftTicks, rightTicks, leftRevs, rightRevs
-  // forwardDist and reverseDist
-  // Use the params array to store this information, and set the
-  // packetType and command files accordingly, then use sendResponse
-  // to send out the packet. See sendMessage on how to use sendResponse.
-  //
+  //sends tick status to pi
   TPacket statusPacket;
   statusPacket.packetType = PACKET_TYPE_RESPONSE;
   statusPacket.command = RESP_STATUS;
@@ -115,10 +87,21 @@ void sendStatus()
 
 void sendColour(int colour)
 {
+  //sends colour "status" when findColour is called on the pi
+  
   TPacket statusPacket;
   statusPacket.packetType = PACKET_TYPE_RESPONSE;
   statusPacket.command = RESP_COLOUR;
   statusPacket.params[0] = colour;
+  statusPacket.params[1] = 0;
+  statusPacket.params[2] = 0;
+  statusPacket.params[3] = 0;
+  statusPacket.params[4] = 0;
+  statusPacket.params[5] = 0;
+  statusPacket.params[6] = 0;
+  statusPacket.params[7] = 0;
+  statusPacket.params[8] = 0;
+  statusPacket.params[9] = 0;
 
   sendResponse(&statusPacket);
 }
@@ -196,12 +179,6 @@ void sendResponse(TPacket *packet)
   writeSerial(buffer, len);
 }
 
-
-/*
-   Setup and start codes for external interrupts and
-   pullup resistors.
-
-*/
 // Enable pull up resistors on pins 2 and 3
 void enablePullups()
 {
@@ -222,7 +199,7 @@ static volatile float distance;
 static unsigned long currTime; static unsigned long lastTime = 0;
 void leftISR()
 {
-  if (distance <= 5) dir = STOP;
+  if (distance <= 10) dir = STOP;
   switch (dir)
   {
     case STOP:
@@ -421,19 +398,11 @@ int pwmVal(float speed)
 void forward(float dist, float speed)
 {
   int val = pwmVal(speed);
-
-  // For now we will ignore dist and move
-  // forward indefinitely. We will fix this
-  // in Week 9.
-
-  // LF = Left forward pin, LR = Left reverse pin
-  // RF = Right forward pin, RR = Right reverse pin
-  // This will be replaced later with bare-metal code.
-
-
+  
   dir = FORWARD;
-  analogWrite(LF, val);
+  analogWrite(LF, val - 30);
   analogWrite(RF, val);
+  
   analogWrite(LR, 0);
   analogWrite(RR, 0);
 
@@ -463,7 +432,7 @@ void reverse(float dist, float speed)
   // RF = Right forward pin, RR = Right reverse pin
   // This will be replaced later with bare-metal code.
   dir = BACKWARD;
-  analogWrite(LR, val);
+  analogWrite(LR, val - 30);
   analogWrite(RR, val);
   analogWrite(LF, 0);
   analogWrite(RF, 0);
@@ -490,7 +459,7 @@ void left(float ang, float speed)
   // To turn left we reverse the left wheel and move
   // the right wheel forward.
   dir  = LEFT;
-  analogWrite(LR, val);
+  analogWrite(LR, val - 30);
   analogWrite(RF, val);
   analogWrite(LF, 0);
   analogWrite(RR, 0);
@@ -511,7 +480,7 @@ void right(float ang, float speed)
   // the left wheel forward.
   dir = RIGHT;
   analogWrite(RR, val);
-  analogWrite(LF, val);
+  analogWrite(LF, val - 30);
   analogWrite(LR, 0);
   analogWrite(RF, 0);
 }
@@ -720,13 +689,6 @@ void handlePacket(TPacket *packet)
 #define THRESHOLD 10
 void loop() {
 
-  // Uncomment the code below for Step 2 of Activity 3 in Week 8 Studio 2
-
-  //   forward(100, 80);
-
-  // Uncomment the code below for Week 9 Studio 2
-
-
 
   TPacket recvPacket; // This holds commands from the Pi
 
@@ -744,9 +706,7 @@ void loop() {
   }
 
   //ultrasonic
-  ultrasonicloop();
-  
-  //TCS3200
+  ultrasonicDist();
 
 
 }

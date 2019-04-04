@@ -3,7 +3,7 @@ void ultrasonicsetup(){
   pinMode(A1, INPUT);
 }
 
-void ultrasonicloop() {
+void ultrasonicDist() {
   currTime = micros();
   digitalWrite(A0, HIGH);
   if (currTime - lastTime > THRESHOLD) {

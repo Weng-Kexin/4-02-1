@@ -20,8 +20,6 @@ void coloursetup() {
   // Setting frequency-scaling to 20%
   digitalWrite(S0, HIGH);
   digitalWrite(S1, LOW);
-
-  Serial.begin(9600);
 }
 
 void findColour() {
