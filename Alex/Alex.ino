@@ -37,7 +37,7 @@ static volatile unsigned long rightForwardTicksTurns;
 static volatile unsigned long leftReverseTicksTurns;
 static volatile unsigned long rightReverseTicksTurns;
 
-
+static volatile unsigned long diff;
 // Store the revolutions on Alex's left
 // and right wheels
 volatile float leftRevs;
@@ -190,8 +190,8 @@ void enablePullups()
   DDRD  &= 0b11110011;
   PORTD |= 0b00001100;
 }
-#define COUNTS_PER_DEGREE_LEFT   1.00
-#define COUNTS_PER_DEGREE_RIGHT   0.90
+#define COUNTS_PER_DEGREE_LEFT   0.80
+#define COUNTS_PER_DEGREE_RIGHT   0.80
 #define COUNTS_PER_REV      182
 #define WHEEL_CIRC          20.41
 
@@ -210,22 +210,26 @@ void leftISR()
     case FORWARD:
       leftForwardTicks++;
       forwardDist = (unsigned long) ((float) leftForwardTicks / COUNTS_PER_REV * WHEEL_CIRC);
+      diff = leftForwardTicks - rightForwardTicks;
       break;
 
 
     case BACKWARD:
       leftReverseTicks++;
       reverseDist = (unsigned long) ((float) leftReverseTicks / COUNTS_PER_REV * WHEEL_CIRC);
+      diff = leftReverseTicks - rightReverseTicks;
       break;
 
     case LEFT:
       leftReverseTicksTurns++;
       degree = (unsigned long) ((float) leftReverseTicksTurns / COUNTS_PER_DEGREE_LEFT);
+      diff = leftReverseTicksTurns - rightForwardTicksTurns;
       break;
 
     case RIGHT:
       leftForwardTicksTurns++;
       degree = (unsigned long) ((float) leftForwardTicksTurns / COUNTS_PER_DEGREE_RIGHT);
+      diff = leftForwardTicksTurns - rightReverseTicksTurns;
       break;
   }
 //    Serial.print("LEFT FORW TICKS TURNS: ");
@@ -395,15 +399,18 @@ int pwmVal(float speed)
 void forward(float dist, float speed)
 {
   int val = pwmVal(speed);
-  
+  int diff_left, diff_right;
   dir = FORWARD;
-  analogWrite(LF, val);
-  analogWrite(RF, val - 20);
-  analogWrite(LR, 0);
-  analogWrite(RR, 0);
+  
   ultrasonicDist();
   ultraTime = (ultraTime < 10) ? 900 : ultraTime;
   while(forwardDist < dist && (ultraTime > 700)){
+    diff_left = (diff > 0)? diff : 0;
+    diff_right = (diff > 0)? 0 : diff;
+    analogWrite(LF, val - diff_left);
+    analogWrite(RF, val - diff_right);
+    analogWrite(LR, 0);
+    analogWrite(RR, 0);
     ultrasonicDist();
     ultraTime = (ultraTime < 10) ? 900 : ultraTime;
   }
@@ -420,21 +427,18 @@ void reverse(float dist, float speed)
 {
 
   int val = pwmVal(speed);
-
-  // For now we will ignore dist and
-  // reverse indefinitely. We will fix this
-  // in Week 9.
-
-  // LF = Left forward pin, LR = Left reverse pin
-  // RF = Right forward pin, RR = Right reverse pin
-  // This will be replaced later with bare-metal code.
+  int diff_left, diff_right;
   dir = BACKWARD;
-  analogWrite(LR, val);
-  analogWrite(RR, val - 20);
-  analogWrite(LF, 0);
-  analogWrite(RF, 0);
 
-  while (reverseDist < dist);
+  while (reverseDist < dist)
+  {
+    diff_left = (diff > 0)? diff : 0;
+    diff_right = (diff > 0)? 0 : diff;
+    analogWrite(LF, 0);
+    analogWrite(RF, 0);
+    analogWrite(LR, val - diff_left);
+    analogWrite(RR, val - diff_right);
+  }
   stop_motor();
 }
 
@@ -446,17 +450,21 @@ void reverse(float dist, float speed)
 void left(float ang, float speed)
 {
   int val = pwmVal(speed);
-
+  int diff_left, diff_right;  
   // For now we will ignore ang. We will fix this in Week 9.
   // We will also replace this code with bare-metal later.
   // To turn left we reverse the left wheel and move
   // the right wheel forward.
   dir  = LEFT;
-  analogWrite(LR, val);
-  analogWrite(RF, val);
-  analogWrite(LF, 0);
-  analogWrite(RR, 0);
-  while (degree < ang);
+  while (degree < ang)
+  {
+    diff_left = (diff > 0)? diff : 0;
+    diff_right = (diff > 0)? 0 : diff;
+    analogWrite(LF, 0);
+    analogWrite(RF, val - diff_right);
+    analogWrite(LR, val - diff_left);
+    analogWrite(RR, 0);    
+  }
   stop_motor();
 }
 
@@ -468,17 +476,21 @@ void left(float ang, float speed)
 void right(float ang, float speed)
 {
   int val = pwmVal(speed);
-
+  int diff_left, diff_right;
   // For now we will ignore ang. We will fix this in Week 9.
   // We will also replace this code with bare-metal later.
   // To turn right we reverse the right wheel and move
   // the left wheel forward.
   dir = RIGHT;
-  analogWrite(RR, val);
-  analogWrite(LF, val);
-  analogWrite(LR, 0);
-  analogWrite(RF, 0);
-  while (degree < ang);
+  while (degree < ang)
+  {
+    diff_left = (diff > 0)? diff : 0;
+    diff_right = (diff > 0)? 0 : diff;
+    analogWrite(LF, val - diff_left);
+    analogWrite(RF, 0);
+    analogWrite(LR, 0);
+    analogWrite(RR, val - diff_right);    
+  }
   stop_motor();
 }
 
@@ -659,7 +671,6 @@ void setup() {
   enablePullups();
   initializeState();
   sei();
-  forward(1000, 100);
 }
 
 void handlePacket(TPacket *packet)
@@ -689,19 +700,20 @@ void handlePacket(TPacket *packet)
 void loop() {
 
 
- TPacket recvPacket; // This holds commands from the Pi
+  TPacket recvPacket; // This holds commands from the Pi
 
- TResult result = readPacket(&recvPacket);
+  TResult result = readPacket(&recvPacket);
 
- if (result == PACKET_OK)
-   handlePacket(&recvPacket);
- else if (result == PACKET_BAD)
- {
-   sendBadPacket();
- }
- else if (result == PACKET_CHECKSUM_BAD)
- {
-   sendBadChecksum();
- }
+  if (result == PACKET_OK)
+    handlePacket(&recvPacket);
+  else if (result == PACKET_BAD)
+  {
+    sendBadPacket();
+  }
+  else if (result == PACKET_CHECKSUM_BAD)
+  {
+    sendBadChecksum();
+  }
+
 
 }
