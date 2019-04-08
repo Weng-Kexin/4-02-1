@@ -46,6 +46,7 @@ volatile float rightRevs;
 // Forward and backward distance traveled
 volatile float forwardDist;
 volatile float reverseDist;
+volatile float degree;
 
 TResult readPacket(TPacket *packet)
 {
@@ -189,17 +190,18 @@ void enablePullups()
   DDRD  &= 0b11110011;
   PORTD |= 0b00001100;
 }
-
+#define COUNTS_PER_DEGREE_LEFT   1.00
+#define COUNTS_PER_DEGREE_RIGHT   0.90
 #define COUNTS_PER_REV      182
 #define WHEEL_CIRC          20.41
+
 // Functions to be called by INT0 and INT1 ISRs.
 
-static volatile float ultraTime;
+static volatile float ultraTime = 1000;
 static volatile float distance;
 static unsigned long currTime; static unsigned long lastTime = 0;
 void leftISR()
 {
-  if (distance <= 10) dir = STOP;
   switch (dir)
   {
     case STOP:
@@ -210,6 +212,7 @@ void leftISR()
       forwardDist = (unsigned long) ((float) leftForwardTicks / COUNTS_PER_REV * WHEEL_CIRC);
       break;
 
+
     case BACKWARD:
       leftReverseTicks++;
       reverseDist = (unsigned long) ((float) leftReverseTicks / COUNTS_PER_REV * WHEEL_CIRC);
@@ -217,30 +220,24 @@ void leftISR()
 
     case LEFT:
       leftReverseTicksTurns++;
+      degree = (unsigned long) ((float) leftReverseTicksTurns / COUNTS_PER_DEGREE_LEFT);
       break;
 
     case RIGHT:
       leftForwardTicksTurns++;
+      degree = (unsigned long) ((float) leftForwardTicksTurns / COUNTS_PER_DEGREE_RIGHT);
       break;
-
-
   }
-
-  //  leftRevs = (float)leftTicks / COUNTS_PER_REV;
-
-  // We calculate forwardDist only in leftISR because we
-  // assume that the left and right wheels move at the same
-  // time.
-  //  forwardDist = leftRevs * WHEEL_CIRC;
-
-  //  Serial.print("LEFT FORW TICKS: ");
-  //  Serial.println(leftForwardTicks);
-  //  Serial.print("LEFT REVRS TICKS: ");
-  //  Serial.println(leftReverseTicks);
-  //  Serial.print("LEFT Forward Dist: ");
-  //  Serial.println(forwardDist );
-  //  Serial.print("LEFT Reverse Dist: ");
-  //  Serial.println(reverseDist );
+//    Serial.print("LEFT FORW TICKS TURNS: ");
+//    Serial.println(leftForwardTicksTurns);
+//    Serial.print("LEFT REVRS TICKS TURNS: ");
+//    Serial.println(leftReverseTicksTurns);
+//    Serial.print("DEGREE: ");
+//    Serial.println(degree);
+//    Serial.print("LEFT Forward Dist: ");
+//    Serial.println(forwardDist );
+//    Serial.print("LEFT Reverse Dist: ");
+//    Serial.println(reverseDist );
 }
 
 void rightISR()
@@ -400,17 +397,17 @@ void forward(float dist, float speed)
   int val = pwmVal(speed);
   
   dir = FORWARD;
-  analogWrite(LF, val - 30);
-  analogWrite(RF, val);
-  
+  analogWrite(LF, val);
+  analogWrite(RF, val - 20);
   analogWrite(LR, 0);
   analogWrite(RR, 0);
-
-  while (forwardDist < dist);
-  analogWrite(LR, 0);
-  analogWrite(RR, 0);
-  analogWrite(LF, 0);
-  analogWrite(RF, 0);
+  ultrasonicDist();
+  ultraTime = (ultraTime < 10) ? 900 : ultraTime;
+  while(forwardDist < dist && (ultraTime > 700)){
+    ultrasonicDist();
+    ultraTime = (ultraTime < 10) ? 900 : ultraTime;
+  }
+  stop_motor();
 
 }
 
@@ -432,17 +429,13 @@ void reverse(float dist, float speed)
   // RF = Right forward pin, RR = Right reverse pin
   // This will be replaced later with bare-metal code.
   dir = BACKWARD;
-  analogWrite(LR, val - 30);
-  analogWrite(RR, val);
+  analogWrite(LR, val);
+  analogWrite(RR, val - 20);
   analogWrite(LF, 0);
   analogWrite(RF, 0);
 
   while (reverseDist < dist);
-  analogWrite(LR, 0);
-  analogWrite(LF, 0);
-  analogWrite(RF, 0);
-  analogWrite(RR, 0);
-
+  stop_motor();
 }
 
 // Turn Alex left "ang" degrees at speed "speed".
@@ -459,10 +452,12 @@ void left(float ang, float speed)
   // To turn left we reverse the left wheel and move
   // the right wheel forward.
   dir  = LEFT;
-  analogWrite(LR, val - 30);
+  analogWrite(LR, val);
   analogWrite(RF, val);
   analogWrite(LF, 0);
   analogWrite(RR, 0);
+  while (degree < ang);
+  stop_motor();
 }
 
 // Turn Alex right "ang" degrees at speed "speed".
@@ -480,9 +475,11 @@ void right(float ang, float speed)
   // the left wheel forward.
   dir = RIGHT;
   analogWrite(RR, val);
-  analogWrite(LF, val - 30);
+  analogWrite(LF, val);
   analogWrite(LR, 0);
   analogWrite(RF, 0);
+  while (degree < ang);
+  stop_motor();
 }
 
 // Stop Alex. To replace with bare-metal code later.
@@ -514,6 +511,7 @@ void clearCounters()
   rightReverseTicksTurns = 0;
   forwardDist = 0;
   reverseDist = 0;
+  degree = 0;
 }
 
 // Clears one particular counter
@@ -645,6 +643,7 @@ void waitForHello()
 void setup() {
   // put your setup code here, to run once:
 
+  cli();
   //ultrasonic
   ultrasonicsetup();
   
@@ -652,7 +651,6 @@ void setup() {
   coloursetup();
 
 
-  cli();
   setupEINT();
   setupSerial();
   startSerial();
@@ -661,6 +659,7 @@ void setup() {
   enablePullups();
   initializeState();
   sei();
+  forward(1000, 100);
 }
 
 void handlePacket(TPacket *packet)
@@ -686,27 +685,23 @@ void handlePacket(TPacket *packet)
 }
 
 
-#define THRESHOLD 10
+#define THRESHOLD 5
 void loop() {
 
 
-  TPacket recvPacket; // This holds commands from the Pi
+ TPacket recvPacket; // This holds commands from the Pi
 
-  TResult result = readPacket(&recvPacket);
+ TResult result = readPacket(&recvPacket);
 
-  if (result == PACKET_OK)
-    handlePacket(&recvPacket);
-  else if (result == PACKET_BAD)
-  {
-    sendBadPacket();
-  }
-  else if (result == PACKET_CHECKSUM_BAD)
-  {
-    sendBadChecksum();
-  }
-
-  //ultrasonic
-  ultrasonicDist();
-
+ if (result == PACKET_OK)
+   handlePacket(&recvPacket);
+ else if (result == PACKET_BAD)
+ {
+   sendBadPacket();
+ }
+ else if (result == PACKET_CHECKSUM_BAD)
+ {
+   sendBadChecksum();
+ }
 
 }
