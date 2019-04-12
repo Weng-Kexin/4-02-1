@@ -197,7 +197,7 @@ void enablePullups()
 
 // Functions to be called by INT0 and INT1 ISRs.
 
-static volatile float ultraTime = 1000;
+static volatile float ultraTime = 0;
 static volatile float distance;
 static unsigned long currTime; static unsigned long lastTime = 0;
 void leftISR()
@@ -209,6 +209,8 @@ void leftISR()
 
     case FORWARD:
       leftForwardTicks++;
+      ultrasonicDist();
+      ultraTime = (ultraTime < 10) ? 900 : ultraTime;
       forwardDist = (unsigned long) ((float) leftForwardTicks / COUNTS_PER_REV * WHEEL_CIRC);
       diff = leftForwardTicks - rightForwardTicks;
       break;
@@ -401,18 +403,19 @@ void forward(float dist, float speed)
   int val = pwmVal(speed);
   int diff_left, diff_right;
   dir = FORWARD;
-  
+  while(ultraTime < 50)
+  {
+    ultrasonicDist(); 
+  }
   ultrasonicDist();
   ultraTime = (ultraTime < 10) ? 900 : ultraTime;
-  while(forwardDist < dist && (ultraTime > 700)){
+  while(forwardDist < dist && (ultraTime > 600)){
     diff_left = (diff > 0)? diff : 0;
     diff_right = (diff > 0)? 0 : diff;
     analogWrite(LF, val - diff_left);
     analogWrite(RF, val - diff_right);
     analogWrite(LR, 0);
     analogWrite(RR, 0);
-    ultrasonicDist();
-    ultraTime = (ultraTime < 10) ? 900 : ultraTime;
   }
   stop_motor();
 
@@ -497,11 +500,29 @@ void right(float ang, float speed)
 // Stop Alex. To replace with bare-metal code later.
 void stop_motor()
 {
+  switch (dir)
+  {
+    case FORWARD:
+      analogWrite(LF, 0);
+      delay(40);
+      analogWrite(RF, 0);
+      break;
+    case BACKWARD:
+      analogWrite(LR, 0);
+      delay(80);
+      analogWrite(RR, 0);
+      break;
+    case RIGHT:
+      analogWrite(RR, 0);
+      analogWrite(LF, 0);
+      break;
+    case LEFT:
+      analogWrite(RF, 0);
+      analogWrite(LR, 0);
+      break;
+  }
   dir = STOP;
-  analogWrite(LF, 0);
-  analogWrite(LR, 0);
-  analogWrite(RF, 0);
-  analogWrite(RR, 0);
+  clearCounters();
 }
 
 /*
@@ -524,6 +545,7 @@ void clearCounters()
   forwardDist = 0;
   reverseDist = 0;
   degree = 0;
+  ultraTime = 0;
 }
 
 // Clears one particular counter
@@ -696,7 +718,7 @@ void handlePacket(TPacket *packet)
 }
 
 
-#define THRESHOLD 5
+#define THRESHOLD 10
 void loop() {
 
 
@@ -714,6 +736,5 @@ void loop() {
   {
     sendBadChecksum();
   }
-
 
 }
