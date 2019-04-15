@@ -1,16 +1,22 @@
-void ultrasonicsetup(){
-  pinMode(A0, OUTPUT);
-  pinMode(A1, INPUT);
+void IRsetup(){
+  pinMode(LEFT_IR, INPUT);
+  pinMode(RIGHT_IR, INPUT);
 }
 
-void ultrasonicDist() {
-  currTime = micros();
-  digitalWrite(A0, HIGH);
-  if (currTime - lastTime > THRESHOLD) {
-    digitalWrite(A0, LOW);
-    ultraTime = pulseIn(A1, HIGH);
-    distance = (ultraTime / 2 * 343) / 10000;
-    lastTime = currTime;
-    //Serial.println(distance);
+void infraRed() {
+  LEFT_OBSTACLE = analogRead(LEFT_IR);
+  RIGHT_OBSTACLE = analogRead(RIGHT_IR);
+
+//  Serial.print("LEFT_OBSTACLE : ");
+//  Serial.println(LEFT_OBSTACLE);
+//  Serial.print("RIGHT_OBSTACLE : ");
+//  Serial.println(RIGHT_OBSTACLE);
+  
+  if (LEFT_OBSTACLE < 500 || RIGHT_OBSTACLE < 500) {
+//    Serial.println("HI HARRY");
+    stop_while_forward = true;
+  } else {
+//    Serial.println("BYE HARRY");
+    stop_while_forward = false;
   }
 }
