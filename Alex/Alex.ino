@@ -239,16 +239,10 @@ void leftISR()
       diff = leftForwardTicksTurns - rightReverseTicksTurns;
       break;
   }
+      diff_left = (diff > 0) ? diff : 0;
+      diff_right = (diff > 0) ? 0 : diff;
 //    Serial.print("LEFT FORW TICKS: ");
 //    Serial.println(leftForwardTicks);
-//    Serial.print("LEFT REVRS TICKS TURNS: ");
-//    Serial.println(leftReverseTicksTurns);
-//    Serial.print("DEGREE: ");
-//    Serial.println(degree);
-//    Serial.print("LEFT Forward Dist: ");
-//    Serial.println(forwardDist );
-//    Serial.print("LEFT Reverse Dist: ");
-//    Serial.println(reverseDist );
 }
 
 void rightISR()
@@ -274,14 +268,9 @@ void rightISR()
       rightReverseTicksTurns++;
       break;
   }
-//    rightRevs = rightTicks / COUNTS_PER_REV;
-//    forwardDist = rightRevs * WHEEL_CIRC;
 //    Serial.print("RIGHT FORW TICKS: ");
 //    Serial.println(rightForwardTicks);
-//    Serial.print("RIGHT REVRS TICKS: ");
-//    Serial.println(rightReverseTicks);
-//    Serial.print("RIGHT Dist: ");
-//    Serial.println(forwardDist );
+
 }
 
 // Set up the external interrupt pins INT0 and INT1
@@ -407,12 +396,15 @@ void forward(float dist, float speed)
 {
   int val = pwmVal(speed);
   dir = FORWARD;
-    analogWrite(LF, val - 20);
-    analogWrite(RF, val);
+  while(forwardDist < dist && !stop_while_forward)
+  {
+    diff_left = diff > 0? diff : 0;
+    diff_right = diff > 0? 0 : diff;
+    analogWrite(LF, val - diff_left);
+    analogWrite(RF, val - diff_right);
     analogWrite(LR, 0);
-    analogWrite(RR, 0);  
-
-  while(forwardDist < dist && !stop_while_forward);
+    analogWrite(RR, 0);
+  }
   stop_motor();
   stop_while_forward = false;
 }
@@ -427,19 +419,14 @@ void reverse(float dist, float speed)
 
   int val = pwmVal(speed);
   dir = BACKWARD;
-
-    analogWrite(LF, 0);
-    analogWrite(RF, 0);
-    analogWrite(LR, val - 20);
-    analogWrite(RR, val);  
   while (reverseDist < dist)
   {
-//    diff_left = diff > 0? diff : 0;
-//    diff_right = diff > 0? 0 : diff;
-//    analogWrite(LF, 0);
-//    analogWrite(RF, 0);
-//    analogWrite(LR, val - 0.5*diff_left);
-//    analogWrite(RR, val - 0.5*diff_right);
+    diff_left = diff > 0? diff : 0;
+    diff_right = diff > 0? 0 : diff;
+    analogWrite(LF, 0);
+    analogWrite(RF, 0);
+    analogWrite(LR, val - diff_left);
+    analogWrite(RR, val - diff_right);
   }
   stop_motor();
 }
@@ -457,18 +444,14 @@ void left(float ang, float speed)
   // To turn left we reverse the left wheel and move
   // the right wheel forward.
   dir  = LEFT;
-    analogWrite(LF, 0);
-    analogWrite(RF, val);
-    analogWrite(LR, val);
-    analogWrite(RR, 0);    
   while (degree < ang)
   {
-//    diff_left = diff > 0? diff : 0;
-//    diff_right = diff > 0? 0 : diff;
-//    analogWrite(LF, 0);
-//    analogWrite(RF, val - diff_right);
-//    analogWrite(LR, val - diff_left);
-//    analogWrite(RR, 0);    
+    diff_left = diff > 0? diff : 0;
+    diff_right = diff > 0? 0 : diff;
+    analogWrite(LF, 0);
+    analogWrite(RF, val - diff_right);
+    analogWrite(LR, val - diff_left);
+    analogWrite(RR, 0);    
   }
   stop_motor();
 }
@@ -486,16 +469,12 @@ void right(float ang, float speed)
   // To turn right we reverse the right wheel and move
   // the left wheel forward.
   dir = RIGHT;
-  analogWrite(LF, val);
-  analogWrite(RF, 0);
-  analogWrite(LR, 0);
-  analogWrite(RR, val);
   while (degree < ang)
   {
-//    analogWrite(LF, val - diff_left);
-//    analogWrite(RF, 0);
-//    analogWrite(LR, 0);
-//    analogWrite(RR, val - diff_right);    
+    analogWrite(LF, val - diff_left);
+    analogWrite(RF, 0);
+    analogWrite(LR, 0);
+    analogWrite(RR, val - diff_right);    
   }
   stop_motor();
 }
@@ -507,6 +486,7 @@ void stop_motor()
   {
     case FORWARD:
       analogWrite(LF, 0);
+      delay(40);
       analogWrite(RF, 0);
       break;
     case BACKWARD:
@@ -524,7 +504,7 @@ void stop_motor()
       break;
   }
   dir = STOP;
-//  clearCounters();
+  clearCounters();
 }
 
 /*
@@ -549,6 +529,8 @@ void clearCounters()
   degree = 0;
   ultraTime = 0;
   diff = 0;
+  diff_left = 0;
+  diff_right = 0;
 }
 
 // Clears one particular counter
@@ -737,6 +719,4 @@ void loop() {
   {
     sendBadChecksum();
   }
-
-  
 }
